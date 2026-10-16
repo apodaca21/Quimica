@@ -1,0 +1,6 @@
+Estos archivos fueron generados por el simulador ilustrativo.
+No son fotografías ni mediciones de la FLIR C5.
+matriz_simulada.npy y matriz_simulada.csv contienen el último cuadro
+de un calentamiento simulado, de 120 × 160 (alto × ancho), en °C.
+secuencia_simulada.npz contiene la clave 'temperaturas' y 'tiempos_s'.
+fotografia_visual.jpg no tiene datos radiométricos.
