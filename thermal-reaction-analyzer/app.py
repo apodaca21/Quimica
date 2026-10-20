@@ -7,6 +7,7 @@ import sys
 import streamlit as st
 
 from src.ui.about_page import render_about_page
+from src.ui.capture_page import render_capture_page
 from src.ui.dashboard import render_dashboard
 from src.ui.experiments_page import render_experiments_page
 from src.ui.import_page import render_import_page
@@ -18,6 +19,7 @@ PAGES = {
     "Panel principal": render_dashboard,
     "Simulación térmica": render_simulation_page,
     "Importar imágenes FLIR": render_import_page,
+    "Captura FLIR": render_capture_page,
     "Análisis de experimentos": render_experiments_page,
     "Información del proyecto": render_about_page,
 }

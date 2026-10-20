@@ -36,6 +36,19 @@ streamlit run app.py
 
 La aplicación abre el panel principal. No muestra temperaturas hasta que se inicia una simulación o se importa una matriz.
 
+### Vista en vivo de la FLIR USB
+
+Con la cámara conectada y encendida:
+
+```bash
+cd "/Users/alejandroapodaca/Documents/Carpeta 1/Escuela7/Quimica/thermal-reaction-analyzer"
+./scripts/abrir_flir.sh
+```
+
+En la ventana: botón **Contraste** (o `c`), **Capturar** (o `s`) y **Salir** (o `q`).
+Las capturas se guardan en `data/captures/sesion_FECHA_HORA/`.
+Esa vista no abre la cámara del Mac. El contraste no son grados Celsius.
+
 ## Pruebas
 
 ```bash

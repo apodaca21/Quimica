@@ -1,0 +1,1 @@
+Carpeta de capturas de sesión de la FLIR USB.
