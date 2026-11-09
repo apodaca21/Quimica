@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.models.thermal_frame import DataOrigin, ThermalFrame
+from src.utils.names import file_stem as make_file_stem
 
 
 @dataclass
@@ -42,3 +43,7 @@ class Experiment:
     def has_time_series(self) -> bool:
         timed = [frame for frame in self.numeric_frames if frame.timestamp_s is not None]
         return len(timed) >= 2
+
+    @property
+    def file_stem(self) -> str:
+        return make_file_stem(self.name, self.id)

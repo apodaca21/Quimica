@@ -38,6 +38,10 @@ ORIGIN_NOTES = {
     DataOrigin.MEDICION_RADIOMETRICA_VERIFICADA: (
         "Medición radiométrica verificada con el procedimiento aprobado para la cámara."
     ),
+    DataOrigin.VISTA_FLIR_USB: (
+        "Temperaturas aparentes de la escena USB de la FLIR, ancladas a la lectura mostrada en cámara. "
+        "No son un JPEG radiométrico verificado de la C5 ni una simulación."
+    ),
 }
 
 

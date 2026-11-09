@@ -14,6 +14,36 @@ from src.ui.state import activate
 from src.utils.validation import ValidationError
 
 
+def render_import_compact() -> None:
+    """Importación compacta para el panel derecho."""
+    st.caption("Solo archivos de la cámara: fotos JPG/PNG o CSV exportado de un ensayo.")
+    name = st.text_input("Nombre", value="Captura_FLIR", key="imp_name")
+    interval = st.number_input("Intervalo si no hay tiempo (s)", min_value=0.25, max_value=30.0, value=1.0, step=0.25, key="imp_int")
+    uploads = st.file_uploader(
+        "Fotos o CSV de la FLIR",
+        type=["jpg", "jpeg", "png", "csv"],
+        accept_multiple_files=True,
+        key="imp_files",
+    )
+    if st.button("Importar", type="primary", width="stretch", disabled=not uploads, key="imp_go"):
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                paths: list[Path] = []
+                for upload in uploads or []:
+                    destination = Path(directory) / Path(upload.name).name
+                    destination.write_bytes(upload.getvalue())
+                    paths.append(destination)
+                result = import_paths(paths, name.strip() or "Importación", manual_interval_s=float(interval))
+        except ValidationError as exc:
+            st.error(str(exc))
+        else:
+            for message in result.messages:
+                st.caption(message)
+            if result.experiment is not None:
+                activate(result.experiment, start_playback=False)
+                st.success("Cargado. Ábrelo en Ensayo o Análisis.")
+
+
 def render_import_page() -> None:
     st.markdown("<div class='hero-kicker'>Archivos locales</div>", unsafe_allow_html=True)
     st.markdown("<h1 class='hero-title'>Importar imágenes FLIR</h1>", unsafe_allow_html=True)

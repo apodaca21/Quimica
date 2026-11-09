@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 from src.models.experiment import Experiment
 from src.models.thermal_frame import origin_label
 from src.services.thermal_analysis import TABLE_COLUMNS, AnalysisResult
+from src.services.thermal_interpretation import classify_thermal_behavior
 
 UNITS = {
     "temperatura": "°C",
@@ -55,6 +56,7 @@ def series_json(experiment: Experiment, result: AnalysisResult) -> bytes:
         "delta_T_serie_C": result.delta_t_c,
         "tendencia": result.trend,
         "explicacion": result.explanation,
+        "interpretacion_termica": classify_thermal_behavior(result, experiment=experiment).as_dict(),
         "advertencias": result.warnings,
         "parametros": experiment.parameters,
         "filas": rows,

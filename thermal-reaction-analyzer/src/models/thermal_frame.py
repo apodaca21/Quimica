@@ -17,6 +17,7 @@ class DataOrigin(str, Enum):
     MEDICION_RADIOMETRICA_VERIFICADA = "medicion_radiometrica_verificada"
     IMAGEN_VISUAL = "imagen_visual"
     FLIR_PENDIENTE = "flir_pendiente_validacion"
+    VISTA_FLIR_USB = "vista_flir_usb"
 
 
 QUANTITATIVE_ORIGINS = {
@@ -31,6 +32,7 @@ ORIGIN_LABELS = {
     DataOrigin.MEDICION_RADIOMETRICA_VERIFICADA: "Medición radiométrica verificada",
     DataOrigin.IMAGEN_VISUAL: "Imagen visual sin temperaturas",
     DataOrigin.FLIR_PENDIENTE: "FLIR pendiente de validación",
+    DataOrigin.VISTA_FLIR_USB: "Vista USB FLIR, video compuesto (no radiométrico)",
 }
 
 

@@ -19,13 +19,22 @@ DEFAULTS = {
     "roi_h": 50,
     "palette": "Inferno",
     "baseline_frames": 1,
+    "experiment_name": "Ensayo_NaOH_1",
+    "live_protocol": "disolucion_agua",
+    "experiment_running": False,
+    "flir_autostart_done": False,
+    "live_gray0": None,
+    "live_t0": None,
+    "live_sample_t": 0.0,
+    "live_t_ref_c": 24.0,
+    "console_tool": "Ensayo",
 }
 
 
 def init_state() -> None:
     for key, value in DEFAULTS.items():
         if key not in st.session_state:
-            st.session_state[key] = value if not isinstance(value, dict) else {}
+            st.session_state[key] = dict(value) if isinstance(value, dict) else value
 
 
 def experiments() -> dict[str, Experiment]:

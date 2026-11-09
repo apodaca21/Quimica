@@ -10,7 +10,7 @@ from src.models.experiment import Experiment
 from src.models.thermal_frame import DataOrigin, origin_label
 from src.services.export_service import figures_html, series_csv, series_json
 from src.services.thermal_analysis import analyze_experiment
-from src.ui.components import delta_figure, range_figure, render_empty, series_figure
+from src.ui.components import delta_figure, range_figure, render_empty, render_thermal_interpretation, series_figure
 from src.ui.state import activate, active_experiment, experiments
 from src.utils.validation import ValidationError, clamp_roi
 
@@ -29,7 +29,7 @@ def _save_form(experiment: Experiment | None) -> None:
         reagents = st.text_input("Reactivos utilizados", value=experiment.reagents if experiment else "")
         ambient = st.number_input(
             "Temperatura ambiente (°C)",
-            value=float(experiment.ambient_temperature_c or 24.0),
+            value=float(experiment.ambient_temperature_c if experiment and experiment.ambient_temperature_c is not None else 24.0),
             step=0.5,
         )
         observations = st.text_area("Observaciones", value=experiment.observations if experiment else "")
@@ -39,7 +39,7 @@ def _save_form(experiment: Experiment | None) -> None:
     if experiment is None:
         created = Experiment(
             name=name.strip() or "Ensayo sin nombre",
-            origin=DataOrigin.SIMULACION,
+            origin=DataOrigin.VISTA_FLIR_USB,
             description=description,
             session_date=session_date or created_date(),
             assay_type=assay or "Registro de sesión",
@@ -78,6 +78,38 @@ def _analysis_for(experiment: Experiment):
     return analyze_experiment(experiment, x, y, roi_w, roi_h, int(st.session_state.baseline_frames))
 
 
+def render_experiments_compact() -> None:
+    """Lista y lectura del ensayo activo, sin salir de la cámara."""
+    stored = experiments()
+    current = active_experiment()
+    if not stored:
+        render_empty("Aún no hay ensayos guardados en esta sesión.")
+        return
+    labels = {
+        f"{item.name} · {item.id}": item.id
+        for item in stored.values()
+    }
+    selected = st.selectbox("Ensayo", list(labels), index=_index_of(labels, current.id if current else None), key="exp_pick")
+    if current is None or labels[selected] != st.session_state.active_id:
+        activate(stored[labels[selected]])
+        current = active_experiment()
+    if current is None or not current.has_numeric_data:
+        render_empty("Este ensayo no tiene temperaturas para analizar.")
+        return
+    try:
+        result = _analysis_for(current)
+    except ValidationError as exc:
+        st.error(str(exc))
+        return
+    st.caption(f"{current.name} · ΔT {result.delta_t_c:+.2f} °C · {result.trend}")
+    render_thermal_interpretation(result, current, compact=True)
+    csv_bytes = series_csv(current, result)
+    json_bytes = series_json(current, result)
+    cols = st.columns(2)
+    cols[0].download_button("CSV", csv_bytes, f"{current.file_stem}_serie.csv", "text/csv", width="stretch", key="exp_csv")
+    cols[1].download_button("JSON", json_bytes, f"{current.file_stem}_resumen.json", "application/json", width="stretch", key="exp_json")
+
+
 def render_experiments_page() -> None:
     st.markdown("<div class='hero-kicker'>Sesión de laboratorio</div>", unsafe_allow_html=True)
     st.markdown("<h1 class='hero-title'>Análisis de experimentos</h1>", unsafe_allow_html=True)
@@ -89,7 +121,7 @@ def render_experiments_page() -> None:
             for item in stored.values()
         }
         selected = st.selectbox("Ensayo activo", list(labels), index=_index_of(labels, current.id if current else None))
-        if labels[selected] != st.session_state.active_id:
+        if current is None or labels[selected] != st.session_state.active_id:
             activate(stored[labels[selected]])
             current = active_experiment()
     _save_form(current)
@@ -110,6 +142,7 @@ def render_experiments_page() -> None:
     left, right = st.columns(2)
     left.plotly_chart(range_figure(result), width="stretch")
     right.plotly_chart(delta_figure(result), width="stretch")
+    render_thermal_interpretation(result, current)
     csv_bytes = series_csv(current, result)
     json_bytes = series_json(current, result)
     html_bytes = figures_html(
@@ -166,7 +199,7 @@ def render_experiments_page() -> None:
     figure.update_xaxes(title="Tiempo (s)")
     figure.update_yaxes(title="Temperatura promedio (°C)")
     st.plotly_chart(figure, width="stretch")
-    st.caption("La comparación no convierte una simulación en una medición ni calcula entalpía.")
+    st.caption("La comparación usa ensayos de la cámara. No calcula entalpía.")
 
 
 def _index_of(labels: dict[str, str], active_id: str | None) -> int:

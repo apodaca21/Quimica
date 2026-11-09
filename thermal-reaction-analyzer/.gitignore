@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 data/captures/sesion_*/
+data/lab/*.sqlite
+data/lab/*.sqlite-journal
+data/lab/sessions/

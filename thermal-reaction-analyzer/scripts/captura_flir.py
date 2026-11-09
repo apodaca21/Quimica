@@ -14,172 +14,26 @@ Comando:
 
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-INDICES = (0, 1, 2)
-TIEMPO_APERTURA_MS = 5000
-TIEMPO_LECTURA_MS = 3000
-FALLOS_MAX = 30
-BARRA_ALTO = 56
 ROOT = Path(__file__).resolve().parents[1]
-CAPTURAS_ROOT = ROOT / "data" / "captures"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
+from src.services.flir_camera import (  # noqa: E402
+    ErrorDeCamara,
+    aplicar_contraste,
+    buscar_camara_externa,
+    crear_sesion_capturas,
+    guardar_captura,
+)
 
-class ErrorDeCamara(RuntimeError):
-    """La cámara no pudo abrirse o no entregó imágenes."""
-
-
-def crear_sesion_capturas(base: Path = CAPTURAS_ROOT) -> Path:
-    """Crea la carpeta de esta sesión y un aviso legible."""
-    base.mkdir(parents=True, exist_ok=True)
-    marca = datetime.now().strftime("%Y%m%d_%H%M%S")
-    sesion = base / f"sesion_{marca}"
-    sesion.mkdir(parents=True, exist_ok=False)
-    (sesion / "LEEME.txt").write_text(
-        "Capturas de la sesión de la FLIR USB.\n"
-        "El contraste visual no representa grados Celsius.\n"
-        "archivos *_original.jpg = imagen de la cámara\n"
-        "archivos *_contraste.jpg = misma imagen con mapa de color\n"
-        "archivos *_vista.jpg = lo que se veía en la ventana al capturar\n",
-        encoding="utf-8",
-    )
-    return sesion
-
-
-def guardar_captura(
-    sesion: Path,
-    frame_original: np.ndarray,
-    frame_contraste: np.ndarray,
-    vista: np.ndarray,
-    con_contraste: bool,
-) -> Path:
-    """Guarda la captura actual en la carpeta de la sesión. Devuelve la ruta de la vista."""
-    marca = datetime.now().strftime("%H%M%S_%f")[:-3]
-    modo = "con_contraste" if con_contraste else "sin_contraste"
-    original = sesion / f"captura_{marca}_{modo}_original.jpg"
-    contraste = sesion / f"captura_{marca}_{modo}_contraste.jpg"
-    vista_path = sesion / f"captura_{marca}_{modo}_vista.jpg"
-    cv2.imwrite(str(original), frame_original)
-    cv2.imwrite(str(contraste), frame_contraste)
-    cv2.imwrite(str(vista_path), vista)
-    return vista_path
-
-
-def nombres_de_camaras() -> list[dict[str, str]]:
-    try:
-        salida = subprocess.check_output(
-            ["system_profiler", "SPCameraDataType", "-json"],
-            text=True,
-            timeout=20,
-        )
-        datos = json.loads(salida)
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
-        raise ErrorDeCamara(
-            "No se pudo consultar la lista de cámaras de macOS. "
-            f"Detalle: {exc}"
-        ) from exc
-    camaras = datos.get("SPCameraDataType", [])
-    if not isinstance(camaras, list):
-        return []
-    resultado = []
-    for camara in camaras:
-        if not isinstance(camara, dict):
-            continue
-        resultado.append(
-            {
-                "nombre": str(camara.get("_name", "Cámara sin nombre")),
-                "modelo": str(camara.get("spcamera_model-id", "")),
-            }
-        )
-    return resultado
-
-
-def es_flir(nombre: str, modelo: str) -> bool:
-    texto = f"{nombre} {modelo}".lower()
-    return "flir" in texto or "vendorid_2507" in texto or "productid_4107" in texto
-
-
-def es_resolucion_de_mac(ancho: int, alto: int) -> bool:
-    return ancho >= 1280 or alto >= 1280
-
-
-def abrir_indice(indice: int) -> tuple[cv2.VideoCapture, tuple[int, ...]]:
-    captura = cv2.VideoCapture()
-    captura.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, TIEMPO_APERTURA_MS)
-    captura.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, TIEMPO_LECTURA_MS)
-    try:
-        abierta = captura.open(indice, cv2.CAP_AVFOUNDATION)
-    except cv2.error as exc:
-        captura.release()
-        raise ErrorDeCamara(
-            f"OpenCV rechazó el índice {indice}. Detalle: {exc}"
-        ) from exc
-    if not abierta or not captura.isOpened():
-        captura.release()
-        raise ErrorDeCamara(f"El índice {indice} no se abrió.")
-    captura.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    for _ in range(20):
-        correcto, frame = captura.read()
-        if correcto and frame is not None and frame.size > 0:
-            return captura, tuple(int(valor) for valor in frame.shape)
-    captura.release()
-    raise ErrorDeCamara(
-        f"El índice {indice} se abrió, pero no entregó ninguna imagen. "
-        "Revisa que la FLIR esté encendida y no en reposo."
-    )
-
-
-def buscar_camara_externa() -> tuple[cv2.VideoCapture, int, str]:
-    camaras = nombres_de_camaras()
-    ancho_flir, alto_flir = 640, 480
-    informes: list[str] = []
-    elegida: tuple[int, str] | None = None
-
-    for indice in INDICES:
-        try:
-            captura, forma = abrir_indice(indice)
-        except ErrorDeCamara as exc:
-            informes.append(str(exc))
-            continue
-        alto, ancho = int(forma[0]), int(forma[1])
-        informes.append(f"Índice {indice}: {ancho} × {alto} px.")
-        captura.release()
-        if es_resolucion_de_mac(ancho, alto):
-            informes.append(f"Índice {indice} descartado: cámara del Mac.")
-            continue
-        if ancho == ancho_flir and alto == alto_flir:
-            etiqueta = f"FLIR USB, {ancho} × {alto} px"
-            if indice < len(camaras) and es_flir(camaras[indice]["nombre"], camaras[indice]["modelo"]):
-                etiqueta = f"FLIR Systems, {ancho} × {alto} px"
-            elegida = (indice, etiqueta)
-            break
-
-    if elegida is None:
-        raise ErrorDeCamara(
-            "No apareció la FLIR de 640 × 480 en los índices 0, 1 y 2.\n" + "\n".join(informes)
-        )
-
-    indice, etiqueta = elegida
-    captura, forma = abrir_indice(indice)
-    alto, ancho = int(forma[0]), int(forma[1])
-    if es_resolucion_de_mac(ancho, alto) or (ancho, alto) != (ancho_flir, alto_flir):
-        captura.release()
-        raise ErrorDeCamara(
-            f"El índice {indice} entregó {ancho} × {alto}. Cancelado para no abrir la cámara del Mac."
-        )
-    return captura, indice, etiqueta
-
-
-def aplicar_contraste(frame: np.ndarray) -> np.ndarray:
-    gris = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    return cv2.applyColorMap(gris, cv2.COLORMAP_INFERNO)
+BARRA_ALTO = 56
+FALLOS_MAX = 30
 
 
 def _botones(ancho: int) -> dict[str, tuple[int, int, int, int]]:
@@ -192,9 +46,6 @@ def _botones(ancho: int) -> dict[str, tuple[int, int, int, int]]:
     for nombre, w in zip(nombres, anchos):
         zonas[nombre] = (x, 8, x + w, 8 + alto)
         x += w + margen
-    # Ajuste fino si la ventana es más ancha
-    if x < ancho - margen:
-        pass
     return zonas
 
 

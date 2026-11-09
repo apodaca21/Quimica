@@ -1,14 +1,15 @@
-# Analizador térmico de reacciones químicas
+# THERMAL LAB — Analizador térmico de reacciones químicas
 
-Primer avance funcional del sistema para visualizar y analizar cambios de temperatura superficial. Funciona sin una cámara conectada: la fuente principal de este avance es un simulador ilustrativo, y también puede importar matrices numéricas.
+Laboratorio interactivo para registrar el overlay de temperatura de una cámara FLIR USB (UVC 640 × 480), analizar series temporales y comparar ensayos. Conserva el código del primer avance y añade telemetría verificable.
+
+La aplicación **no inventa una matriz radiométrica**. Si OpenCV entrega video BGR de 8 bits, las temperaturas cuantitativas salen del número que la propia FLIR dibuja (OCR o entrada manual). El color del video es análisis visual relativo, no °C.
 
 ## Requisitos
 
 - macOS con Apple Silicon
 - Python 3.12 de Homebrew
-- Conexión a internet solo para instalar dependencias
-
-ExifTool es opcional. Sirve para leer metadatos de un JPEG. Su ausencia no impide abrir la aplicación ni ejecutar las pruebas. No convierte un JPEG en temperaturas.
+- Cámara FLIR USB UVC (VendorID 2507 / ProductID 4107 en este equipo)
+- Tesseract OCR opcional, para leer las cifras del overlay
 
 ## Instalación
 
@@ -20,34 +21,49 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-ExifTool, si más adelante se quiere inspeccionar metadatos:
+Para lectura automática de temperaturas:
 
 ```bash
-brew install exiftool
+brew install tesseract
 ```
 
-## Ejecución
+ExifTool sigue siendo opcional y no convierte un JPEG en temperaturas.
 
-Desde la carpeta `thermal-reaction-analyzer`, con el entorno activado:
+## Ejecución
 
 ```bash
 streamlit run app.py
 ```
 
-La aplicación abre el panel principal. No muestra temperaturas hasta que se inicia una simulación o se importa una matriz.
+Abre [http://localhost:8501](http://localhost:8501). La FLIR se intenta conectar al arrancar. Si no está disponible, usa **Reconectar** o, en **Configuración**, un video grabado de prueba (queda etiquetado como reproducción, no como FLIR en vivo).
 
-### Vista en vivo de la FLIR USB
-
-Con la cámara conectada y encendida:
+Ventana OpenCV aparte:
 
 ```bash
-cd "/Users/alejandroapodaca/Documents/Carpeta 1/Escuela7/Quimica/thermal-reaction-analyzer"
 ./scripts/abrir_flir.sh
 ```
 
-En la ventana: botón **Contraste** (o `c`), **Capturar** (o `s`) y **Salir** (o `q`).
-Las capturas se guardan en `data/captures/sesion_FECHA_HORA/`.
-Esa vista no abre la cámara del Mac. El contraste no son grados Celsius.
+## Uso rápido (demostración)
+
+1. Comprueba que el encabezado diga **FLIR conectada**.
+2. En **Configuración**, congela un cuadro, ajusta el recorte alrededor del número de la FLIR y verifica el texto OCR.
+3. Pulsa **Guardar recortes OCR**.
+4. En **Experimento**, nombra el ensayo e **Iniciar línea base**.
+5. Marca **Marcar mezcla** cuando ocurra el evento (sigue el protocolo de la profesora).
+6. Observa T, ΔT y la gráfica. ΔT = T_actual − T_referencia, con la referencia de la línea base.
+7. **Finalizar y guardar**. Compara ensayos y descarga PDF/JSON.
+
+**Modo presentación:** interruptor *Presentación* en el encabezado. Agranda cámara y métricas y oculta las pestañas técnicas.
+
+## Qué mide y qué no
+
+| Tipo | Origen | ¿Es °C cuantitativo? |
+| --- | --- | --- |
+| Temperatura FLIR | Overlay leído por OCR o escrito a mano | Sí, del overlay de la cámara |
+| Temperatura radiométrica | Matriz calibrada por píxel | Solo si se verifica (hoy no) |
+| Información visual | Color, ROI, contornos | No. Relativo al video |
+
+ΔT y dT/dt usan únicamente lecturas válidas de la misma fuente. Un OCR fallido se marca ausente; no se reutiliza en silencio la lectura anterior.
 
 ## Pruebas
 
@@ -56,45 +72,13 @@ source .venv/bin/activate
 pytest
 ```
 
-En este equipo, con Python 3.12.15, el resultado fue **18 passed**.
+Las 28 pruebas del primer avance se conservan. Hay pruebas nuevas de OCR, telemetría, ROI, persistencia, reporte y reproducción de video.
 
-## Archivos de ejemplo
+## Datos
 
-En `data/samples` hay matrices generadas por el simulador, no fotografías de la FLIR C5:
+- `data/captures/sesion_*`: fotos y videos de la sesión de cámara (fuera de SQLite).
+- `data/lab/thermal_lab.sqlite`: ensayos persistentes.
+- `data/lab/ocr_regions.json`: recortes OCR normalizados.
+- `data/samples`: matrices ilustrativas del simulador original, no mediciones FLIR.
 
-- `matriz_simulada.npy` y `matriz_simulada.csv`: último cuadro de un calentamiento simulado, 120 × 160 (alto × ancho), en °C.
-- `secuencia_simulada.npz`: claves `temperaturas` y `tiempos_s`.
-- `fotografia_visual.jpg`: imagen sin datos radiométricos.
-
-Para regenerarlos:
-
-```bash
-python scripts/generate_samples.py
-```
-
-## Qué distingue la interfaz
-
-- **Simulación ilustrativa:** el modelo `T = T_base + A(t)·G(x, y) + ruido`.
-- **Datos cuantitativos importados:** números de un CSV, NPY o NPZ. No los certificó la cámara.
-- **Medición radiométrica verificada:** no se asigna en este avance.
-- **Imagen visual o FLIR pendiente:** se muestra la fotografía y, si ExifTool está disponible, los metadatos. No hay grados Celsius.
-
-## Límites de la simulación
-
-- Resolución fija: 160 px de ancho por 120 px de alto.
-- Máximo 180 cuadros.
-- Duración máxima 180 s.
-- Intervalo entre 0.25 s y 30 s.
-- Memoria estimada máxima de 64 MB.
-
-## FLIR C5 más adelante
-
-Cuando exista un JPEG original de la cámara:
-
-1. Instalar ExifTool.
-2. Importar el archivo en **Importar imágenes FLIR**.
-3. Revisar si aparecen constantes de Planck y el bloque térmico crudo.
-4. Validar formato, orden de bytes, conversión y calibración antes de usar cualquier temperatura.
-5. Solo después de esa verificación se podrá activar la conversión. Hoy `RADIOMETRIC_CONVERSION_VERIFIED` permanece en `False` dentro de `src/services/flir_reader.py`.
-
-La documentación del avance está en `docs/AVANCE_1.md`.
+Documentación técnica: `docs/THERMAL_LAB_2.md`. El avance 1 permanece en `docs/AVANCE_1.md`.

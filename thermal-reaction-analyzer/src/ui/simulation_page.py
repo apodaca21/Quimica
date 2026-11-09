@@ -26,6 +26,44 @@ SCENARIO_HELP = {
 }
 
 
+def render_simulation_compact() -> None:
+    """Controles de simulación para el panel derecho, sin cambiar de página."""
+    st.caption("Simulación ilustrativa. No es una medición de la FLIR.")
+    scenario = st.selectbox(
+        "Escenario",
+        list(SCENARIO_LABELS),
+        format_func=lambda key: SCENARIO_LABELS[key],
+        key="sim_scenario",
+    )
+    st.caption(SCENARIO_HELP[scenario])
+    name = st.text_input("Nombre", value="Simulación_NaOH", key="sim_name")
+    left, right = st.columns(2)
+    initial = left.number_input("T inicial (°C)", min_value=MIN_TEMPERATURE_C, max_value=MAX_TEMPERATURE_C, value=24.0, step=0.5, key="sim_t0")
+    default_magnitude = 0.4 if scenario == "control" else (12.0 if scenario == "calentamiento" else 6.0)
+    magnitude = right.number_input("ΔT (°C)", min_value=0.0, max_value=MAX_CHANGE_C, value=default_magnitude, step=0.5, key="sim_dT")
+    duration = left.number_input("Duración (s)", min_value=MIN_INTERVAL_S, max_value=MAX_DURATION_S, value=30.0, step=1.0, key="sim_dur")
+    interval = right.number_input("Intervalo (s)", min_value=MIN_INTERVAL_S, max_value=MAX_INTERVAL_S, value=1.0, step=0.25, key="sim_int")
+    if st.button("Generar simulación", type="primary", width="stretch", key="sim_go"):
+        try:
+            experiment = generate_simulation(
+                SimulationConfig(
+                    scenario=scenario,
+                    initial_temperature_c=float(initial),
+                    change_magnitude_c=float(magnitude),
+                    duration_s=float(duration),
+                    interval_s=float(interval),
+                    noise_std_c=0.15,
+                    seed=7,
+                    name=name.strip() or "Simulación",
+                )
+            )
+        except ValidationError as exc:
+            st.error(str(exc))
+        else:
+            activate(experiment, start_playback=True)
+            st.success(f"{len(experiment.frames)} cuadros. Ábrelo en Ensayo o Análisis.")
+
+
 def render_simulation_page() -> None:
     st.markdown("<div class='hero-kicker'>Motor ilustrativo</div>", unsafe_allow_html=True)
     st.markdown("<h1 class='hero-title'>Simulación térmica</h1>", unsafe_allow_html=True)
